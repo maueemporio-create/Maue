@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estoque — Mauê Empório</title>
+<style>
+  :root {
+    --surface-0: #FAF9F6;
+    --surface-1: #F1EFE8;
+    --surface-2: #FFFFFF;
+    --text-primary: #2C2C2A;
+    --text-secondary: #5F5E5A;
+    --text-muted: #888780;
+    --text-danger: #A32D2D;
+    --text-success: #3B6D11;
+    --border: #D3D1C7;
+    --border-accent: #185FA5;
+    --text-accent: #185FA5;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 2rem 1rem;
+  }
+  input, button {
+    font-family: inherit;
+    font-size: 14px;
+    border-radius: var(--radius);
+    border: 0.5px solid var(--border);
+  }
+  input { padding: 6px 8px; }
+  button {
+    background: var(--surface-2);
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--surface-1); }
+  button:active { transform: scale(0.98); }
+  .tab-btn.active {
+    background: var(--text-primary);
+    color: var(--surface-2);
+    border-color: var(--text-primary);
+  }
+</style>
+</head>
+<body>
+
+<div style="max-width: 680px; margin: 0 auto;">
+  <h1 style="font-size: 22px; font-weight: 500; margin-bottom: 4px;">Estoque — Mauê Empório</h1>
+  <p id="status-line" style="font-size:13px; color:var(--text-secondary); margin-top:0; margin-bottom: 1rem;">Conectando à planilha...</p>
+
+  <div id="config-box" style="background:var(--surface-1); border-radius:var(--radius); padding:0.75rem 1rem; margin-bottom:1.25rem;">
+    <label style="font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px;">URL do aplicativo da web (Google Apps Script)</label>
+    <div style="display:flex; gap:8px;">
+      <input id="script-url" type="text" placeholder="https://script.google.com/macros/s/.../exec" style="flex:1;">
+      <button id="save-url-btn" style="white-space:nowrap;">Conectar</button>
+    </div>
+  </div>
+
+  <div id="tabs" style="display:flex; gap:8px; margin-bottom:1.25rem; flex-wrap:wrap;"></div>
+
+  <div id="summary" style="display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px; margin-bottom:1.5rem;"></div>
+
+  <div id="list" style="display:flex; flex-direction:column; gap:8px;"></div>
+
+  <div style="display:flex; gap:8px; margin-top:1.25rem;">
+    <button id="save-btn" style="flex:1;">Salvar alteracoes</button>
+    <button id="pedido-btn" style="flex:1; border-color:var(--border-accent); color:var(--text-accent);">Fazer pedido</button>
+  </div>
+
+  <div style="margin-top:1.5rem; padding-top:1.25rem; border-top:0.5px solid var(--border);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <div style="font-size:14px; font-weight:500;">Mensagem para pedido</div>
+      <button id="copy-btn">Copiar</button>
+    </div>
+    <pre id="msg-preview" style="white-space:pre-wrap; font-family:inherit; font-size:13px; color:var(--text-primary); background:var(--surface-1); border-radius:var(--radius); padding:0.75rem 1rem; margin:0;"></pre>
+  </div>
+
+  <div style="margin-top:1rem; padding-top:1rem; border-top:0.5px solid var(--border); font-size:12px; color:var(--text-muted);">
+    Os dados de estoque vivem na planilha do Google Sheets do Mauê Empório.
+  </div>
+</div>
+
+<script>
+const URL_KEY = "maue-emporio-script-url";
+const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyIWxnYDtKZJxQGQsv37fN1m_B0frTzgKZ2tZHVjOb8NtH66XgarDNChzhvM2EeaIP83Q/exec";
+const ABAS = [
+  { id: "Cervejas", label: "Cervejas" },
+  { id: "Nao Alcoolicos", label: "Nao alcoolicos" },
+  { id: "Destilados", label: "Destilados" }
+];
+let currentAba = ABAS[0].id;
+let items = [];
+let scriptUrl = "";
+
+function init() {
+  scriptUrl = localStorage.getItem(URL_KEY) || DEFAULT_SCRIPT_URL;
+  document.getElementById("script-url").value = scriptUrl;
+  renderTabs();
+  if (scriptUrl) {
+    loadFromSheet();
+  } else {
+    setStatus("Configure a URL da planilha abaixo");
+  }
+}
+
+function renderTabs() {
+  const tabs = document.getElementById("tabs");
+  tabs.innerHTML = ABAS.map(a =>
+    '<button class="tab-btn ' + (a.id === currentAba ? 'active' : '') + '" data-aba="' + a.id + '">' + a.label + '</button>'
+  ).join("");
+  tabs.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      currentAba = btn.dataset.aba;
+      renderTabs();
+      if (scriptUrl) loadFromSheet();
+    });
+  });
+}
+
+async function saveUrl() {
+  scriptUrl = document.getElementById("script-url").value.trim();
+  localStorage.setItem(URL_KEY, scriptUrl);
+  if (scriptUrl) await loadFromSheet();
+}
+
+function jsonp(url) {
+  return new Promise((resolve, reject) => {
+    const callbackName = "jsonp_cb_" + Math.random().toString(36).slice(2);
+    const script = document.createElement("script");
+    window[callbackName] = (data) => { resolve(data); cleanup(); };
+    function cleanup() {
+      delete window[callbackName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timer);
+    }
+    const timer = setTimeout(() => { reject(new Error("timeout")); cleanup(); }, 15000);
+    script.onerror = () => { reject(new Error("jsonp failed")); cleanup(); };
+    script.src = url + (url.includes("?") ? "&" : "?") + "callback=" + callbackName;
+    document.body.appendChild(script);
+  });
+}
+
+async function loadFromSheet() {
+  setStatus("Carregando " + currentAba + "...");
+  try {
+    const url = scriptUrl + "?aba=" + encodeURIComponent(currentAba);
+    const data = await jsonp(url);
+    items = data.map((it, i) => ({
+      id: "item-" + i,
+      nome: it.produto,
+      grupo: it.grupo || currentAba,
+      unidade: it.unidade || "unidades",
+      min: Number(it.min) || 0,
+      atual: Number(it.atual) || 0
+    }));
+    setStatus("Conectado — " + currentAba + " carregado da planilha");
+    render();
+  } catch (e) {
+    setStatus("Nao foi possivel carregar a planilha. Confira a URL.");
+    console.error(e);
+  }
+}
+
+async function pushToSheet(list) {
+  const payload = list.map(it => ({ produto: it.nome, min: it.min, atual: it.atual }));
+  const url = scriptUrl + "?action=write&aba=" + encodeURIComponent(currentAba) + "&payload=" + encodeURIComponent(JSON.stringify(payload));
+  return jsonp(url);
+}
+
+function setStatus(msg) {
+  document.getElementById("status-line").textContent = msg;
+}
+
+function need(item) {
+  return Math.max(0, item.min - item.atual);
+}
+
+function render() {
+  const list = document.getElementById("list");
+  const summary = document.getElementById("summary");
+
+  const totalPedir = items.reduce((acc, it) => acc + need(it), 0);
+  const itensAbaixo = items.filter(it => need(it) > 0).length;
+  const itensOk = items.length - itensAbaixo;
+
+  summary.innerHTML =
+    '<div style="background:var(--surface-1); border-radius:var(--radius); padding:1rem;">' +
+      '<div style="font-size:13px; color:var(--text-secondary);">Itens a pedir</div>' +
+      '<div style="font-size:24px; font-weight:500; color:var(--text-danger);">' + totalPedir + '</div>' +
+    '</div>' +
+    '<div style="background:var(--surface-1); border-radius:var(--radius); padding:1rem;">' +
+      '<div style="font-size:13px; color:var(--text-secondary);">Abaixo do minimo</div>' +
+      '<div style="font-size:24px; font-weight:500;">' + itensAbaixo + '</div>' +
+    '</div>' +
+    '<div style="background:var(--surface-1); border-radius:var(--radius); padding:1rem;">' +
+      '<div style="font-size:13px; color:var(--text-secondary);">Ok</div>' +
+      '<div style="font-size:24px; font-weight:500;">' + itensOk + '</div>' +
+    '</div>';
+
+  const groups = [...new Set(items.map(i => i.grupo))];
+  list.innerHTML = groups.map(g =>
+    '<div style="font-size:13px; font-weight:500; color:var(--text-secondary); margin:8px 0 2px;">' + g + '</div>' +
+    items.filter(i => i.grupo === g).map(it => rowHtml(it)).join("")
+  ).join("");
+
+  items.forEach(it => {
+    const atualInput = document.getElementById("atual-" + it.id);
+    const minInput = document.getElementById("min-" + it.id);
+    if (atualInput) atualInput.addEventListener("input", e => onChange(it.id, "atual", e.target.value));
+    if (minInput) minInput.addEventListener("input", e => onChange(it.id, "min", e.target.value));
+  });
+
+  document.getElementById("msg-preview").textContent = buildMessage();
+}
+
+function rowHtml(it) {
+  const falta = need(it);
+  const ok = falta === 0;
+  return '<div style="display:flex; align-items:center; gap:12px; background:var(--surface-2); border:0.5px solid var(--border); border-radius:12px; padding:0.75rem 1rem;">' +
+    '<div style="flex:1; min-width:0;">' +
+      '<div style="font-size:14px; font-weight:500; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + it.nome + '</div>' +
+      '<div style="font-size:12px; color:' + (ok ? 'var(--text-success)' : 'var(--text-danger)') + '; margin-top:2px;">' +
+        (ok ? 'Estoque ok' : ('Pedir ' + falta + ' ' + it.unidade)) +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex; align-items:center; gap:4px;">' +
+      '<label style="font-size:11px; color:var(--text-muted);">Min</label>' +
+      '<input type="number" min="0" id="min-' + it.id + '" value="' + it.min + '" style="width:52px; text-align:center;">' +
+    '</div>' +
+    '<div style="display:flex; align-items:center; gap:4px;">' +
+      '<label style="font-size:11px; color:var(--text-muted);">Atual</label>' +
+      '<input type="number" min="0" id="atual-' + it.id + '" value="' + it.atual + '" style="width:52px; text-align:center;">' +
+    '</div>' +
+  '</div>';
+}
+
+function onChange(id, field, value) {
+  const num = Math.max(0, parseInt(value, 10) || 0);
+  const item = items.find(i => i.id === id);
+  item[field] = num;
+  render();
+}
+
+function buildMessage() {
+  const pedir = items.filter(it => need(it) > 0);
+  let msg = "Bom dia, tudo joia?\n\nPrecisando fazer pedido de " + currentAba.toLowerCase() + " (Maue Emporio):\n\n";
+  if (pedir.length === 0) {
+    msg += "Estoque em dia, sem pedido no momento.";
+  } else {
+    msg += pedir.map(it => "- " + it.nome + " — " + need(it) + " " + it.unidade).join("\n");
+    msg += "\n\nObrigado!";
+  }
+  return msg;
+}
+
+document.getElementById("save-url-btn").addEventListener("click", saveUrl);
+
+document.getElementById("save-btn").addEventListener("click", async () => {
+  if (!scriptUrl) { setStatus("Configure a URL da planilha primeiro."); return; }
+  setStatus("Salvando na planilha...");
+  try {
+    await pushToSheet(items);
+    setStatus("Alteracoes salvas na planilha");
+  } catch (e) {
+    setStatus("Erro ao salvar. Confira a URL e tente novamente.");
+    console.error(e);
+  }
+});
+
+document.getElementById("pedido-btn").addEventListener("click", async () => {
+  if (!scriptUrl) { setStatus("Configure a URL da planilha primeiro."); return; }
+  items = items.map(it => need(it) > 0 ? { ...it, atual: it.min } : it);
+  render();
+  setStatus("Registrando pedido na planilha...");
+  try {
+    await pushToSheet(items);
+    setStatus("Pedido registrado — estoque atualizado na planilha");
+  } catch (e) {
+    setStatus("Erro ao registrar pedido. Confira a URL e tente novamente.");
+    console.error(e);
+  }
+});
+
+document.getElementById("copy-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("copy-btn");
+  try {
+    await navigator.clipboard.writeText(buildMessage());
+    btn.textContent = "Copiado";
+    setTimeout(() => { btn.textContent = "Copiar"; }, 1500);
+  } catch (e) {
+    console.error("Erro ao copiar", e);
+  }
+});
+
+init();
+</script>
+</body>
+</html>
