@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reservas — Mauê Empório</title>
+<title>Ver Reservas — Mauê Empório</title>
 <style>
   :root {
     --surface-0: #FAF9F6;
@@ -14,9 +14,6 @@
     --text-muted: #888780;
     --text-danger: #A32D2D;
     --border: #D3D1C7;
-    --border-accent: #185FA5;
-    --text-accent: #185FA5;
-    --radius: 8px;
   }
   * { box-sizing: border-box; }
   body {
@@ -26,27 +23,13 @@
     margin: 0;
     padding: 2rem 1rem;
   }
-  label {
-    font-size: 12px;
-    color: var(--text-secondary);
-    display: block;
-    margin-bottom: 4px;
-  }
-  input {
-    width: 100%;
-    font-family: inherit;
-    font-size: 14px;
-    border-radius: var(--radius);
-    border: 0.5px solid var(--border);
-    padding: 8px 10px;
-  }
   button {
     font-family: inherit;
-    font-size: 14px;
-    border-radius: var(--radius);
+    font-size: 13px;
+    border-radius: 8px;
     border: 0.5px solid var(--border);
     background: var(--surface-2);
-    padding: 8px 14px;
+    padding: 6px 12px;
     cursor: pointer;
   }
   button:hover { background: var(--surface-1); }
@@ -57,11 +40,10 @@
     display: inline-block;
     margin-bottom: 1rem;
   }
-  .field-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 10px;
-    margin-bottom: 0.75rem;
+  .section-title {
+    font-size: 14px;
+    font-weight: 500;
+    margin: 1.5rem 0 8px;
   }
 </style>
 </head>
@@ -70,42 +52,13 @@
 <div style="max-width: 680px; margin: 0 auto;">
   <a class="back-link" href="index.html">&larr; Voltar</a>
   <h1 style="font-size: 22px; font-weight: 500; margin-bottom: 4px;">Reservas — Mauê Empório</h1>
-  <p id="status-line" style="font-size:13px; color:var(--text-secondary); margin-top:0; margin-bottom: 1.5rem;">Carregando reservas...</p>
+  <p id="status-line" style="font-size:13px; color:var(--text-secondary); margin-top:0;">Carregando reservas...</p>
 
-  <div style="background:var(--surface-1); border-radius:var(--radius); padding:1rem; margin-bottom:1.5rem;">
-    <div style="font-size:14px; font-weight:500; margin-bottom:10px;">Nova reserva</div>
-    <div class="field-grid">
-      <div>
-        <label for="nome">Nome</label>
-        <input id="nome" type="text" placeholder="Nome do cliente">
-      </div>
-      <div>
-        <label for="telefone">Telefone</label>
-        <input id="telefone" type="text" placeholder="(00) 00000-0000">
-      </div>
-      <div>
-        <label for="data">Data</label>
-        <input id="data" type="date">
-      </div>
-      <div>
-        <label for="horario">Horario</label>
-        <input id="horario" type="time">
-      </div>
-      <div>
-        <label for="pessoas">Pessoas</label>
-        <input id="pessoas" type="number" min="1" placeholder="Ex: 4">
-      </div>
-    </div>
-    <label for="obs">Observacoes</label>
-    <input id="obs" type="text" placeholder="Ex: mesa perto da janela" style="margin-bottom:10px;">
-    <button id="add-btn" style="width:100%; border-color:var(--border-accent); color:var(--text-accent);">Adicionar reserva</button>
-  </div>
+  <div class="section-title">Esta semana (segunda a domingo)</div>
+  <div id="lista-semana" style="display:flex; flex-direction:column; gap:8px;"></div>
 
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-    <div style="font-size:14px; font-weight:500;">Reservas da semana</div>
-    <button id="refresh-btn">Atualizar</button>
-  </div>
-  <div id="lista" style="display:flex; flex-direction:column; gap:8px;"></div>
+  <div class="section-title">Proximas reservas</div>
+  <div id="lista-proximas" style="display:flex; flex-direction:column; gap:8px;"></div>
 </div>
 
 <script>
@@ -133,21 +86,26 @@ function setStatus(msg) {
   document.getElementById("status-line").textContent = msg;
 }
 
-function inicioDaSemana() {
-  const hoje = new Date();
-  const dia = hoje.getDay();
-  const inicio = new Date(hoje);
-  inicio.setDate(hoje.getDate() - dia);
-  inicio.setHours(0, 0, 0, 0);
-  return inicio;
+function hoje() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
-function fimDaSemana() {
-  const inicio = inicioDaSemana();
-  const fim = new Date(inicio);
-  fim.setDate(inicio.getDate() + 6);
-  fim.setHours(23, 59, 59, 999);
-  return fim;
+function segundaDaSemana(base) {
+  const d = new Date(base);
+  const dia = d.getDay();
+  const diff = (dia === 0 ? -6 : 1) - dia;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function domingoDaSemana(segunda) {
+  const d = new Date(segunda);
+  d.setDate(d.getDate() + 6);
+  d.setHours(23, 59, 59, 999);
+  return d;
 }
 
 function parseData(str) {
@@ -161,14 +119,14 @@ function parseData(str) {
 
 function formatarData(d) {
   if (!d) return "";
-  return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0");
+  const dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
+  return dias[d.getDay()] + " " + String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0");
 }
 
 async function carregarReservas() {
   setStatus("Carregando reservas...");
   try {
-    const data = await jsonp(SCRIPT_URL + "?action=reservas_list");
-    reservas = data;
+    reservas = await jsonp(SCRIPT_URL + "?action=reservas_list");
     render();
   } catch (e) {
     setStatus("Nao foi possivel carregar as reservas.");
@@ -177,26 +135,38 @@ async function carregarReservas() {
 }
 
 function render() {
-  const inicio = inicioDaSemana();
-  const fim = fimDaSemana();
+  const inicioSemana = segundaDaSemana(hoje());
+  const fimSemana = domingoDaSemana(inicioSemana);
 
-  const daSemana = reservas
+  const comData = reservas
     .map(r => ({ ...r, dataObj: parseData(r.data) }))
-    .filter(r => r.dataObj && r.dataObj >= inicio && r.dataObj <= fim)
+    .filter(r => r.dataObj);
+
+  const daSemana = comData
+    .filter(r => r.dataObj >= inicioSemana && r.dataObj <= fimSemana)
     .sort((a, b) => a.dataObj - b.dataObj || String(a.horario).localeCompare(String(b.horario)));
 
-  setStatus(daSemana.length + " reserva(s) esta semana");
+  const proximas = comData
+    .filter(r => r.dataObj > fimSemana)
+    .sort((a, b) => a.dataObj - b.dataObj || String(a.horario).localeCompare(String(b.horario)));
 
-  const lista = document.getElementById("lista");
-  if (daSemana.length === 0) {
-    lista.innerHTML = '<div style="font-size:13px; color:var(--text-muted); padding:1rem; text-align:center;">Nenhuma reserva para esta semana.</div>';
+  setStatus(daSemana.length + " reserva(s) esta semana, " + proximas.length + " proxima(s)");
+
+  renderLista("lista-semana", daSemana, "Nenhuma reserva para esta semana.");
+  renderLista("lista-proximas", proximas, "Nenhuma reserva futura cadastrada.");
+}
+
+function renderLista(idContainer, lista, textoVazio) {
+  const el = document.getElementById(idContainer);
+  if (lista.length === 0) {
+    el.innerHTML = '<div style="font-size:13px; color:var(--text-muted); padding:1rem; text-align:center; background:var(--surface-1); border-radius:8px;">' + textoVazio + '</div>';
     return;
   }
 
-  lista.innerHTML = daSemana.map(r => `
+  el.innerHTML = lista.map(r => `
     <div style="display:flex; align-items:center; gap:12px; background:var(--surface-2); border:0.5px solid var(--border); border-radius:12px; padding:0.75rem 1rem;">
-      <div style="text-align:center; min-width:48px;">
-        <div style="font-size:15px; font-weight:500;">${formatarData(r.dataObj)}</div>
+      <div style="text-align:center; min-width:56px;">
+        <div style="font-size:14px; font-weight:500;">${formatarData(r.dataObj)}</div>
         <div style="font-size:11px; color:var(--text-secondary);">${r.horario || ""}</div>
       </div>
       <div style="flex:1; min-width:0;">
@@ -208,7 +178,7 @@ function render() {
     </div>
   `).join("");
 
-  lista.querySelectorAll(".del-btn").forEach(btn => {
+  el.querySelectorAll(".del-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
       if (!confirm("Excluir esta reserva?")) return;
       try {
@@ -220,38 +190,6 @@ function render() {
     });
   });
 }
-
-document.getElementById("add-btn").addEventListener("click", async () => {
-  const nome = document.getElementById("nome").value.trim();
-  const telefone = document.getElementById("telefone").value.trim();
-  const data = document.getElementById("data").value;
-  const horario = document.getElementById("horario").value;
-  const pessoas = document.getElementById("pessoas").value;
-  const obs = document.getElementById("obs").value.trim();
-
-  if (!nome || !data || !horario || !pessoas) {
-    alert("Preencha nome, data, horario e numero de pessoas.");
-    return;
-  }
-
-  const payload = JSON.stringify({ nome, data, horario, pessoas, telefone, observacoes: obs });
-  setStatus("Adicionando reserva...");
-  try {
-    await jsonp(SCRIPT_URL + "?action=reservas_add&payload=" + encodeURIComponent(payload));
-    document.getElementById("nome").value = "";
-    document.getElementById("telefone").value = "";
-    document.getElementById("data").value = "";
-    document.getElementById("horario").value = "";
-    document.getElementById("pessoas").value = "";
-    document.getElementById("obs").value = "";
-    await carregarReservas();
-  } catch (e) {
-    setStatus("Erro ao adicionar reserva.");
-    console.error(e);
-  }
-});
-
-document.getElementById("refresh-btn").addEventListener("click", carregarReservas);
 
 carregarReservas();
 </script>
