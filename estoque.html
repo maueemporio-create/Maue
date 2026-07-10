@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Estoque — Mauê Empório</title>
+<title>Pedidos Salão — Mauê Empório</title>
 <style>
   :root {
     --surface-0: #FAF9F6;
@@ -52,7 +52,7 @@
 
 <div style="max-width: 680px; margin: 0 auto;">
   <a href="index.html" style="font-size:13px; color:var(--text-secondary); text-decoration:none; display:inline-block; margin-bottom:1rem;">&larr; Voltar</a>
-  <h1 style="font-size: 22px; font-weight: 500; margin-bottom: 4px;">Estoque — Mauê Empório</h1>
+  <h1 style="font-size: 22px; font-weight: 500; margin-bottom: 4px;">Pedidos Salão — Mauê Empório</h1>
   <p id="status-line" style="font-size:13px; color:var(--text-secondary); margin-top:0; margin-bottom: 1rem;">Conectando à planilha...</p>
 
   <div id="config-box" style="background:var(--surface-1); border-radius:var(--radius); padding:0.75rem 1rem; margin-bottom:1.25rem;">
@@ -155,6 +155,7 @@ async function loadFromSheet() {
       nome: it.produto,
       grupo: it.grupo || currentAba,
       unidade: it.unidade || "unidades",
+      fornecedor: it.fornecedor || "",
       min: Number(it.min) || 0,
       atual: Number(it.atual) || 0
     }));
@@ -227,6 +228,7 @@ function rowHtml(it) {
       '<div style="font-size:12px; color:' + (ok ? 'var(--text-success)' : 'var(--text-danger)') + '; margin-top:2px;">' +
         (ok ? 'Estoque ok' : ('Pedir ' + falta + ' ' + it.unidade)) +
       '</div>' +
+      (it.fornecedor ? '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Fornecedor: ' + it.fornecedor + '</div>' : '') +
     '</div>' +
     '<div style="display:flex; align-items:center; gap:4px;">' +
       '<label style="font-size:11px; color:var(--text-muted);">Min</label>' +
@@ -246,10 +248,6 @@ function onChange(id, field, value) {
   render();
 }
 
-const CERVEJA_MSG_ITEMS = ["Stella Pure Gold 600ml", "Original"];
-const DESTILADO_FORNECEDOR_1 = ["Prata 600ml", "Balsamo 600ml", "Amburana 600ml", "Martini Rosso"];
-const DESTILADO_FORNECEDOR_2 = ["Monin Tangerina", "Monin Maracuja", "Monin Le Fruit Jabuticaba"];
-
 function formatMsg(pedir) {
   let msg = "Bom dia, segue o pedido para a semana:\n\n";
   if (pedir.length === 0) {
@@ -261,27 +259,22 @@ function formatMsg(pedir) {
   return msg;
 }
 
+// Agrupa os itens que precisam de pedido pelo valor da coluna
+// "Fornecedor" na planilha. Itens sem fornecedor definido (celula
+// vazia) ficam de fora de qualquer mensagem - pedido feito por
+// aplicativo ou outro meio, sem geracao automatica de texto.
 function buildMessageBlocks() {
-  if (currentAba === "Vinhos") {
-    const pedir = items.filter(it => need(it) > 0 && !it.nome.toLowerCase().startsWith("open wine"));
-    return [{ label: null, text: formatMsg(pedir) }];
+  const pedir = items.filter(it => need(it) > 0 && it.fornecedor && it.fornecedor.trim() !== "");
+
+  if (pedir.length === 0) {
+    return [{ label: null, text: "Nenhum fornecedor configurado para pedido automatico nesta aba no momento (ou estoque em dia)." }];
   }
-  if (currentAba === "Cervejas") {
-    const pedir = items.filter(it => need(it) > 0 && CERVEJA_MSG_ITEMS.includes(it.nome));
-    return [{ label: null, text: formatMsg(pedir) }];
-  }
-  if (currentAba === "Nao Alcoolicos") {
-    return [{ label: null, text: "Sem mensagem automatica para esta categoria." }];
-  }
-  if (currentAba === "Destilados") {
-    const p1 = items.filter(it => need(it) > 0 && DESTILADO_FORNECEDOR_1.includes(it.nome));
-    const p2 = items.filter(it => need(it) > 0 && DESTILADO_FORNECEDOR_2.includes(it.nome));
-    return [
-      { label: "Fornecedor 1", text: formatMsg(p1) },
-      { label: "Fornecedor 2", text: formatMsg(p2) }
-    ];
-  }
-  return [{ label: null, text: formatMsg(items.filter(it => need(it) > 0)) }];
+
+  const fornecedores = [...new Set(pedir.map(it => it.fornecedor))];
+  return fornecedores.map(f => ({
+    label: f,
+    text: formatMsg(pedir.filter(it => it.fornecedor === f))
+  }));
 }
 
 function renderMessages() {
