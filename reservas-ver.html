@@ -140,7 +140,7 @@ function render() {
 
   const comData = reservas
     .map(r => ({ ...r, dataObj: parseData(r.data) }))
-    .filter(r => r.dataObj);
+    .filter(r => r.dataObj && r.status !== "Compareceu");
 
   const daSemana = comData
     .filter(r => r.dataObj >= inicioSemana && r.dataObj <= fimSemana)
@@ -174,15 +174,29 @@ function renderLista(idContainer, lista, textoVazio) {
         <div style="font-size:12px; color:var(--text-secondary);">${r.pessoas || "?"} pessoas ${r.telefone ? "— " + r.telefone : ""}</div>
         ${r.observacoes ? '<div style="font-size:12px; color:var(--text-muted); margin-top:2px;">' + r.observacoes + '</div>' : ""}
       </div>
-      <button data-linha="${r.linha}" class="del-btn" style="color:var(--text-danger); border-color:var(--text-danger);">Excluir</button>
+      <div style="display:flex; flex-direction:column; gap:4px;">
+        <button data-linha="${r.linha}" class="chegou-btn" style="color:var(--text-success); border-color:var(--text-success); font-size:12px;">Reserva chegou</button>
+        <button data-linha="${r.linha}" class="del-btn" style="color:var(--text-danger); border-color:var(--text-danger); font-size:12px;">Excluir</button>
+      </div>
     </div>
   `).join("");
 
   el.querySelectorAll(".del-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
-      if (!confirm("Excluir esta reserva?")) return;
+      if (!confirm("Excluir esta reserva? Ela sera apagada tambem da planilha.")) return;
       try {
         await jsonp(SCRIPT_URL + "?action=reservas_delete&linha=" + btn.dataset.linha);
+        await carregarReservas();
+      } catch (e) {
+        console.error(e);
+      }
+    });
+  });
+
+  el.querySelectorAll(".chegou-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      try {
+        await jsonp(SCRIPT_URL + "?action=reservas_chegou&linha=" + btn.dataset.linha);
         await carregarReservas();
       } catch (e) {
         console.error(e);
