@@ -69,6 +69,37 @@
     padding: 0.75rem 1rem;
     margin-bottom: 1rem;
   }
+  textarea {
+    width: 100%;
+    font-family: inherit;
+    font-size: 14px;
+    border-radius: var(--radius);
+    border: 0.5px solid var(--border);
+    padding: 8px 10px;
+    margin-bottom: 0.75rem;
+    resize: vertical;
+    min-height: 70px;
+  }
+  .toggle-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 1.25rem;
+  }
+  .toggle-btn {
+    flex: 1;
+    font-size: 13px;
+  }
+  .toggle-btn.active {
+    background: var(--text-primary);
+    color: var(--surface-2);
+    border-color: var(--text-primary);
+  }
+  #extrair-btn {
+    background: var(--surface-1);
+    color: var(--text-primary);
+    border-color: var(--border);
+    margin-bottom: 1.25rem;
+  }
 </style>
 </head>
 <body>
@@ -79,6 +110,17 @@
   <p style="font-size:13px; color:var(--text-secondary); margin-top:0; margin-bottom: 1.5rem;">Preencha os dados da reserva</p>
 
   <div id="confirmacao"></div>
+
+  <div class="toggle-row">
+    <button id="modo-mensagem-btn" class="toggle-btn active">Colar mensagem</button>
+    <button id="modo-manual-btn" class="toggle-btn">Preencher manualmente</button>
+  </div>
+
+  <div id="bloco-mensagem">
+    <label for="mensagem">Cole a mensagem da reserva</label>
+    <textarea id="mensagem" placeholder="Ex: 10/07, sexta, Fernanda, 02 pessoas, interno, 20h00."></textarea>
+    <button id="extrair-btn">Extrair dados</button>
+  </div>
 
   <label for="nome">Nome</label>
   <input id="nome" type="text" placeholder="Nome do cliente">
@@ -96,7 +138,7 @@
   <input id="pessoas" type="number" min="1" placeholder="Ex: 4">
 
   <label for="obs">Observacoes (opcional)</label>
-  <input id="obs" type="text" placeholder="Ex: mesa perto da janela">
+  <input id="obs" type="text" placeholder="Ex: interno, mesa perto da janela">
 
   <button id="add-btn">Adicionar reserva</button>
 </div>
@@ -128,6 +170,81 @@ function mostrarConfirmacao(msg, cor) {
   el.style.color = cor || "var(--text-success)";
 }
 
+// Alterna entre o modo "colar mensagem" e "preencher manualmente"
+function setModo(modo) {
+  const blocoMsg = document.getElementById("bloco-mensagem");
+  const btnMsg = document.getElementById("modo-mensagem-btn");
+  const btnManual = document.getElementById("modo-manual-btn");
+  if (modo === "mensagem") {
+    blocoMsg.style.display = "block";
+    btnMsg.classList.add("active");
+    btnManual.classList.remove("active");
+  } else {
+    blocoMsg.style.display = "none";
+    btnManual.classList.add("active");
+    btnMsg.classList.remove("active");
+  }
+}
+
+document.getElementById("modo-mensagem-btn").addEventListener("click", () => setModo("mensagem"));
+document.getElementById("modo-manual-btn").addEventListener("click", () => setModo("manual"));
+setModo("mensagem");
+
+// Extrai os dados de uma mensagem no padrao:
+// "10/07, sexta, Fernanda, 02 pessoas, interno, 20h00."
+// e preenche os campos do formulario para conferencia antes de salvar.
+function extrairDadosMensagem(texto) {
+  const partes = texto.split(",").map(s => s.trim().replace(/\.$/, "")).filter(Boolean);
+  if (partes.length < 5) return null;
+
+  const [diaMes] = partes[0].split("/").map(Number);
+  const mesMatch = partes[0].split("/")[1];
+  if (!diaMes || !mesMatch) return null;
+  const ano = new Date().getFullYear();
+  const dataFormatada = ano + "-" + String(Number(mesMatch)).padStart(2, "0") + "-" + String(diaMes).padStart(2, "0");
+
+  const nome = partes[2];
+
+  const pessoasMatch = partes[3].match(/\d+/);
+  const pessoas = pessoasMatch ? pessoasMatch[0] : "";
+
+  const local = partes[4];
+
+  const horarioBruto = partes[5] || "";
+  const horarioMatch = horarioBruto.match(/(\d{1,2})h(\d{2})?/i);
+  let horario = "";
+  if (horarioMatch) {
+    horario = String(horarioMatch[1]).padStart(2, "0") + ":" + (horarioMatch[2] || "00");
+  }
+
+  const obsExtra = partes.slice(6).join(", ");
+  const observacoes = [local, obsExtra].filter(Boolean).join(" — ");
+
+  return { nome, data: dataFormatada, horario, pessoas, observacoes };
+}
+
+document.getElementById("extrair-btn").addEventListener("click", () => {
+  const texto = document.getElementById("mensagem").value.trim();
+  if (!texto) {
+    mostrarConfirmacao("Cole a mensagem da reserva primeiro.", "var(--text-danger)");
+    return;
+  }
+
+  const dados = extrairDadosMensagem(texto);
+  if (!dados) {
+    mostrarConfirmacao("Nao consegui entender essa mensagem. Confira o formato ou preencha manualmente.", "var(--text-danger)");
+    return;
+  }
+
+  document.getElementById("nome").value = dados.nome || "";
+  document.getElementById("data").value = dados.data || "";
+  document.getElementById("horario").value = dados.horario || "";
+  document.getElementById("pessoas").value = dados.pessoas || "";
+  document.getElementById("obs").value = dados.observacoes || "";
+
+  mostrarConfirmacao("Dados extraidos! Confira os campos abaixo antes de adicionar.");
+});
+
 document.getElementById("add-btn").addEventListener("click", async () => {
   const nome = document.getElementById("nome").value.trim();
   const telefone = document.getElementById("telefone").value.trim();
@@ -152,6 +269,7 @@ document.getElementById("add-btn").addEventListener("click", async () => {
     document.getElementById("horario").value = "";
     document.getElementById("pessoas").value = "";
     document.getElementById("obs").value = "";
+    document.getElementById("mensagem").value = "";
   } catch (e) {
     mostrarConfirmacao("Erro ao adicionar reserva. Tente novamente.", "var(--text-danger)");
     console.error(e);
