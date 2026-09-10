@@ -62,6 +62,22 @@
 
   <div id="summary" style="display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px; margin-bottom:1.5rem;"></div>
 
+  <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+    <button id="novo-produto-btn" style="font-size:13px;">+ Novo produto</button>
+  </div>
+  <div id="novo-produto-form" style="display:none; flex-direction:column; gap:8px; background:var(--surface-1); border-radius:var(--radius); padding:1rem; margin-bottom:1rem;">
+    <input id="np-nome" type="text" placeholder="Nome do produto">
+    <div style="display:flex; gap:8px;">
+      <input id="np-unidade" type="text" placeholder="Unidade (ex: fardos)" style="flex:1; min-width:0;">
+      <input id="np-fornecedor" type="text" placeholder="Fornecedor (opcional)" style="flex:1; min-width:0;">
+      <input id="np-min" type="number" min="0" placeholder="Minimo" style="width:80px;">
+    </div>
+    <div style="display:flex; gap:8px; justify-content:flex-end;">
+      <button id="np-cancelar">Cancelar</button>
+      <button id="np-salvar" style="border-color:var(--border-accent); color:var(--text-accent);">Adicionar produto</button>
+    </div>
+  </div>
+
   <div id="list" style="display:flex; flex-direction:column; gap:8px;"></div>
 
   <div style="display:flex; gap:8px; margin-top:1.25rem;">
@@ -159,6 +175,12 @@ function render() {
   items.forEach(it => {
     const atualInput = document.getElementById("atual-" + it.id);
     if (atualInput) atualInput.addEventListener("input", e => onChange(it.id, "atual", e.target.value));
+    const minInput = document.getElementById("min-" + it.id);
+    if (minInput) minInput.addEventListener("input", e => onChange(it.id, "min", e.target.value));
+  });
+
+  list.querySelectorAll(".remove-item-btn").forEach(btn => {
+    btn.addEventListener("click", () => removerProduto(btn.dataset.id));
   });
 
   renderMessages();
@@ -176,10 +198,66 @@ function rowHtml(it) {
       (it.fornecedor ? '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Fornecedor: ' + it.fornecedor + '</div>' : '') +
     '</div>' +
     '<div style="display:flex; align-items:center; gap:4px;">' +
+      '<label style="font-size:11px; color:var(--text-muted);">Min</label>' +
+      '<input type="number" min="0" id="min-' + it.id + '" value="' + it.min + '" style="width:48px; text-align:center;" onfocus="this.select()">' +
+    '</div>' +
+    '<div style="display:flex; align-items:center; gap:4px;">' +
       '<label style="font-size:11px; color:var(--text-muted);">Atual</label>' +
       '<input type="number" min="0" id="atual-' + it.id + '" value="' + it.atual + '" style="width:52px; text-align:center;" onfocus="this.select()">' +
     '</div>' +
+    '<button class="remove-item-btn" data-id="' + it.id + '" title="Remover produto" style="border:none; background:transparent; color:var(--text-muted); font-size:18px; line-height:1; padding:0 2px;">&times;</button>' +
   '</div>';
+}
+
+async function removerProduto(id) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  if (!confirm('Remover "' + item.nome + '" da lista? Isso apaga a linha na planilha.')) return;
+  setStatus("Removendo produto...");
+  try {
+    const url = SCRIPT_URL + "?action=delete_produto&aba=" + encodeURIComponent(ABA) + "&produto=" + encodeURIComponent(item.nome);
+    const res = await jsonp(url);
+    if (res && res.erro) { setStatus(res.erro); return; }
+    setStatus("Produto removido.");
+    await loadFromSheet();
+  } catch (e) {
+    setStatus("Erro ao remover produto. Tente novamente.");
+    console.error(e);
+  }
+}
+
+function toggleNovoProdutoForm(show) {
+  const form = document.getElementById("novo-produto-form");
+  form.style.display = show ? "flex" : "none";
+}
+
+async function adicionarProduto() {
+  const nome = document.getElementById("np-nome").value.trim();
+  if (!nome) { alert("Digite o nome do produto."); return; }
+  const payload = {
+    produto: nome,
+    grupo: ABA,
+    unidade: document.getElementById("np-unidade").value.trim() || "unidades",
+    fornecedor: document.getElementById("np-fornecedor").value.trim(),
+    min: Number(document.getElementById("np-min").value) || 0,
+    atual: 0
+  };
+  setStatus("Adicionando produto...");
+  try {
+    const url = SCRIPT_URL + "?action=add_produto&aba=" + encodeURIComponent(ABA) + "&payload=" + encodeURIComponent(JSON.stringify(payload));
+    const res = await jsonp(url);
+    if (res && res.erro) { setStatus(res.erro); return; }
+    document.getElementById("np-nome").value = "";
+    document.getElementById("np-unidade").value = "";
+    document.getElementById("np-fornecedor").value = "";
+    document.getElementById("np-min").value = "";
+    toggleNovoProdutoForm(false);
+    setStatus("Produto adicionado!");
+    await loadFromSheet();
+  } catch (e) {
+    setStatus("Erro ao adicionar produto. Tente novamente.");
+    console.error(e);
+  }
 }
 
 function onChange(id, field, value) {
@@ -276,6 +354,13 @@ document.getElementById("save-btn").addEventListener("click", async () => {
     console.error(e);
   }
 });
+
+document.getElementById("novo-produto-btn").addEventListener("click", () => {
+  const form = document.getElementById("novo-produto-form");
+  toggleNovoProdutoForm(form.style.display === "none" || form.style.display === "");
+});
+document.getElementById("np-cancelar").addEventListener("click", () => toggleNovoProdutoForm(false));
+document.getElementById("np-salvar").addEventListener("click", adicionarProduto);
 
 loadFromSheet();
 </script>
