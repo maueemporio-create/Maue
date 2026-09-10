@@ -75,10 +75,11 @@
   </div>
   <div id="novo-produto-form" style="display:none; flex-direction:column; gap:8px; background:var(--surface-1); border-radius:var(--radius); padding:1rem; margin-bottom:1rem;">
     <input id="np-nome" type="text" placeholder="Nome do produto">
-    <div style="display:flex; gap:8px;">
-      <input id="np-unidade" type="text" placeholder="Unidade (ex: garrafas)" style="flex:1; min-width:0;">
-      <input id="np-fornecedor" type="text" placeholder="Fornecedor (opcional)" style="flex:1; min-width:0;">
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <input id="np-unidade" type="text" placeholder="Unidade (ex: garrafas)" style="flex:1; min-width:120px;">
+      <input id="np-fornecedor" type="text" placeholder="Fornecedor (opcional)" style="flex:1; min-width:120px;">
       <input id="np-min" type="number" min="0" placeholder="Minimo" style="width:80px;">
+      <input id="np-ideal" type="number" min="0" placeholder="Ideal" style="width:80px;">
     </div>
     <div style="display:flex; gap:8px; justify-content:flex-end;">
       <button id="np-cancelar">Cancelar</button>
@@ -109,7 +110,8 @@ const ABAS = [
   { id: "Vinhos", label: "Vinhos" },
   { id: "Cervejas", label: "Cervejas" },
   { id: "Nao Alcoolicos", label: "Nao alcoolicos" },
-  { id: "Destilados", label: "Destilados" }
+  { id: "Destilados", label: "Destilados" },
+  { id: "Insumos Drinks", label: "Insumos Drinks" }
 ];
 let currentAba = ABAS[0].id;
 let items = [];
@@ -175,7 +177,11 @@ async function loadFromSheet() {
       unidade: it.unidade || "unidades",
       fornecedor: it.fornecedor || "",
       min: Number(it.min) || 0,
-      atual: Number(it.atual) || 0
+      atual: Number(it.atual) || 0,
+      ideal: Number(it.ideal) || 0,
+      retornavel: !!it.retornavel,
+      caixasVazias: Number(it.caixasVazias) || 0,
+      ultimaAtualizacao: it.ultimaAtualizacao || ""
     }));
     setStatus("Conectado — " + currentAba + " carregado da planilha");
     render();
@@ -186,7 +192,7 @@ async function loadFromSheet() {
 }
 
 async function pushToSheet(list) {
-  const payload = list.map(it => ({ produto: it.nome, min: it.min, atual: it.atual }));
+  const payload = list.map(it => ({ produto: it.nome, min: it.min, atual: it.atual, ideal: it.ideal, caixasVazias: it.caixasVazias }));
   const url = scriptUrl + "?action=write&aba=" + encodeURIComponent(currentAba) + "&payload=" + encodeURIComponent(JSON.stringify(payload));
   return jsonp(url);
 }
@@ -195,16 +201,35 @@ function setStatus(msg) {
   document.getElementById("status-line").textContent = msg;
 }
 
-function need(item) {
-  return Math.max(0, item.min - item.atual);
+// Modelo minimo/ideal: o Minimo so dispara o alerta ("abaixo disso,
+// precisa pedir"); a quantidade sugerida repõe ate o Ideal. Em itens
+// retornaveis (cerveja de garrafa 600ml, agua/agua com gas), o pedido
+// tambem nao pode passar do numero de caixas vazias disponiveis pra
+// trocar com o fornecedor.
+function precisaPedir(item) {
+  return item.atual < item.min;
+}
+
+function pedirBase(item) {
+  return precisaPedir(item) ? Math.max(0, item.ideal - item.atual) : 0;
+}
+
+function pedirFinal(item) {
+  const base = pedirBase(item);
+  if (item.retornavel) return Math.min(base, item.caixasVazias);
+  return base;
+}
+
+function limitadoPorVazias(item) {
+  return item.retornavel && pedirBase(item) > pedirFinal(item);
 }
 
 function render() {
   const list = document.getElementById("list");
   const summary = document.getElementById("summary");
 
-  const totalPedir = items.reduce((acc, it) => acc + need(it), 0);
-  const itensAbaixo = items.filter(it => need(it) > 0).length;
+  const totalPedir = items.reduce((acc, it) => acc + pedirFinal(it), 0);
+  const itensAbaixo = items.filter(it => precisaPedir(it)).length;
   const itensOk = items.length - itensAbaixo;
 
   summary.innerHTML =
@@ -232,6 +257,10 @@ function render() {
     if (atualInput) atualInput.addEventListener("input", e => onChange(it.id, "atual", e.target.value));
     const minInput = document.getElementById("min-" + it.id);
     if (minInput) minInput.addEventListener("input", e => onChange(it.id, "min", e.target.value));
+    const idealInput = document.getElementById("ideal-" + it.id);
+    if (idealInput) idealInput.addEventListener("input", e => onChange(it.id, "ideal", e.target.value));
+    const vaziasInput = document.getElementById("vazias-" + it.id);
+    if (vaziasInput) vaziasInput.addEventListener("input", e => onChange(it.id, "caixasVazias", e.target.value));
   });
 
   list.querySelectorAll(".remove-item-btn").forEach(btn => {
@@ -242,25 +271,42 @@ function render() {
 }
 
 function rowHtml(it) {
-  const falta = need(it);
-  const ok = falta === 0;
-  return '<div style="display:flex; align-items:center; gap:12px; background:var(--surface-2); border:0.5px solid var(--border); border-radius:12px; padding:0.75rem 1rem;">' +
-    '<div style="flex:1; min-width:0;">' +
-      '<div style="font-size:14px; font-weight:500; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + it.nome + '</div>' +
-      '<div style="font-size:12px; color:' + (ok ? 'var(--text-success)' : 'var(--text-danger)') + '; margin-top:2px;">' +
-        (ok ? 'Estoque ok' : ('Pedir ' + falta + ' ' + it.unidade)) +
+  const pedir = pedirFinal(it);
+  const ok = !precisaPedir(it);
+  const capado = limitadoPorVazias(it);
+  return '<div style="background:var(--surface-2); border:0.5px solid var(--border); border-radius:12px; padding:0.75rem 1rem;">' +
+    '<div style="display:flex; align-items:flex-start; gap:8px;">' +
+      '<div style="flex:1; min-width:0;">' +
+        '<div style="font-size:14px; font-weight:500; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + it.nome + '</div>' +
+        '<div style="font-size:12px; color:' + (ok ? 'var(--text-success)' : 'var(--text-danger)') + '; margin-top:2px;">' +
+          (ok ? 'Estoque ok' : ('Pedir ' + pedir + ' ' + it.unidade)) +
+        '</div>' +
+        (capado ? '<div style="font-size:11px; color:var(--text-danger); margin-top:2px;">Precisaria de ' + pedirBase(it) + ', mas so tem ' + it.caixasVazias + ' caixa(s) vazia(s)</div>' : '') +
+        (it.fornecedor ? '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Fornecedor: ' + it.fornecedor + '</div>' : '') +
+        (it.ultimaAtualizacao ? '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Atualizado em ' + it.ultimaAtualizacao + '</div>' : '') +
       '</div>' +
-      (it.fornecedor ? '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Fornecedor: ' + it.fornecedor + '</div>' : '') +
+      '<button class="remove-item-btn" data-id="' + it.id + '" title="Remover produto" style="border:none; background:transparent; color:var(--text-muted); font-size:18px; line-height:1; padding:0 2px;">&times;</button>' +
     '</div>' +
-    '<div style="display:flex; align-items:center; gap:4px;">' +
-      '<label style="font-size:11px; color:var(--text-muted);">Min</label>' +
-      '<input type="number" min="0" id="min-' + it.id + '" value="' + it.min + '" style="width:48px; text-align:center;" onfocus="this.select()">' +
+    '<div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:8px;">' +
+      '<div style="display:flex; align-items:center; gap:4px;">' +
+        '<label style="font-size:11px; color:var(--text-muted);">Min</label>' +
+        '<input type="number" min="0" id="min-' + it.id + '" value="' + it.min + '" style="width:48px; text-align:center;" onfocus="this.select()">' +
+      '</div>' +
+      '<div style="display:flex; align-items:center; gap:4px;">' +
+        '<label style="font-size:11px; color:var(--text-muted);">Ideal</label>' +
+        '<input type="number" min="0" id="ideal-' + it.id + '" value="' + it.ideal + '" style="width:48px; text-align:center;" onfocus="this.select()">' +
+      '</div>' +
+      '<div style="display:flex; align-items:center; gap:4px;">' +
+        '<label style="font-size:11px; color:var(--text-muted);">Atual</label>' +
+        '<input type="number" min="0" id="atual-' + it.id + '" value="' + it.atual + '" style="width:52px; text-align:center;" onfocus="this.select()">' +
+      '</div>' +
+      (it.retornavel ?
+        '<div style="display:flex; align-items:center; gap:4px;">' +
+          '<label style="font-size:11px; color:var(--text-muted);">Caixas vazias</label>' +
+          '<input type="number" min="0" id="vazias-' + it.id + '" value="' + it.caixasVazias + '" style="width:48px; text-align:center;" onfocus="this.select()">' +
+        '</div>'
+      : '') +
     '</div>' +
-    '<div style="display:flex; align-items:center; gap:4px;">' +
-      '<label style="font-size:11px; color:var(--text-muted);">Atual</label>' +
-      '<input type="number" min="0" id="atual-' + it.id + '" value="' + it.atual + '" style="width:52px; text-align:center;" onfocus="this.select()">' +
-    '</div>' +
-    '<button class="remove-item-btn" data-id="' + it.id + '" title="Remover produto" style="border:none; background:transparent; color:var(--text-muted); font-size:18px; line-height:1; padding:0 2px;">&times;</button>' +
   '</div>';
 }
 
@@ -295,6 +341,7 @@ async function adicionarProduto() {
     unidade: document.getElementById("np-unidade").value.trim() || "unidades",
     fornecedor: document.getElementById("np-fornecedor").value.trim(),
     min: Number(document.getElementById("np-min").value) || 0,
+    ideal: Number(document.getElementById("np-ideal").value) || 0,
     atual: 0
   };
   setStatus("Adicionando produto...");
@@ -306,6 +353,7 @@ async function adicionarProduto() {
     document.getElementById("np-unidade").value = "";
     document.getElementById("np-fornecedor").value = "";
     document.getElementById("np-min").value = "";
+    document.getElementById("np-ideal").value = "";
     toggleNovoProdutoForm(false);
     setStatus("Produto adicionado!");
     await loadFromSheet();
@@ -327,7 +375,7 @@ function formatMsg(pedir) {
   if (pedir.length === 0) {
     msg += "Estoque em dia, sem pedido no momento.";
   } else {
-    msg += pedir.map(it => "- " + it.nome + " — " + need(it) + " " + it.unidade).join("\n");
+    msg += pedir.map(it => "- " + it.nome + " — " + pedirFinal(it) + " " + it.unidade).join("\n");
     msg += "\n\nObrigado!";
   }
   return msg;
@@ -338,7 +386,7 @@ function formatMsg(pedir) {
 // vazia) ficam de fora de qualquer mensagem - pedido feito por
 // aplicativo ou outro meio, sem geracao automatica de texto.
 function buildMessageBlocks() {
-  const pedir = items.filter(it => need(it) > 0 && it.fornecedor && it.fornecedor.trim() !== "");
+  const pedir = items.filter(it => pedirFinal(it) > 0 && it.fornecedor && it.fornecedor.trim() !== "");
 
   if (pedir.length === 0) {
     return [{ label: null, text: "Nenhum fornecedor configurado para pedido automatico nesta aba no momento (ou estoque em dia).", items: [] }];
@@ -385,7 +433,15 @@ function renderMessages() {
     btn.addEventListener("click", async () => {
       const idx = Number(btn.dataset.idx);
       const idsDoBloco = new Set(blocks[idx].items.map(it => it.id));
-      items = items.map(it => idsDoBloco.has(it.id) ? { ...it, atual: it.min } : it);
+      items = items.map(it => {
+        if (!idsDoBloco.has(it.id)) return it;
+        const qtd = pedirFinal(it);
+        return {
+          ...it,
+          atual: it.atual + qtd,
+          caixasVazias: it.retornavel ? Math.max(0, it.caixasVazias - qtd) : it.caixasVazias
+        };
+      });
       render();
       setStatus("Registrando pedido na planilha...");
       try {
