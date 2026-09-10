@@ -181,6 +181,7 @@ async function loadFromSheet() {
       ideal: Number(it.ideal) || 0,
       retornavel: !!it.retornavel,
       caixasVazias: Number(it.caixasVazias) || 0,
+      pool: it.pool || null,
       ultimaAtualizacao: it.ultimaAtualizacao || ""
     }));
     setStatus("Conectado — " + currentAba + " carregado da planilha");
@@ -283,6 +284,7 @@ function rowHtml(it) {
         '</div>' +
         (capado ? '<div style="font-size:11px; color:var(--text-danger); margin-top:2px;">Precisaria de ' + pedirBase(it) + ', mas so tem ' + it.caixasVazias + ' caixa(s) vazia(s)</div>' : '') +
         (it.fornecedor ? '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Fornecedor: ' + it.fornecedor + '</div>' : '') +
+        (it.pool ? '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Vasilhame compartilhado: ' + it.pool + '</div>' : '') +
         (it.ultimaAtualizacao ? '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Atualizado em ' + it.ultimaAtualizacao + '</div>' : '') +
       '</div>' +
       '<button class="remove-item-btn" data-id="' + it.id + '" title="Remover produto" style="border:none; background:transparent; color:var(--text-muted); font-size:18px; line-height:1; padding:0 2px;">&times;</button>' +
@@ -300,7 +302,12 @@ function rowHtml(it) {
         '<label style="font-size:11px; color:var(--text-muted);">Atual</label>' +
         '<input type="number" min="0" id="atual-' + it.id + '" value="' + it.atual + '" style="width:52px; text-align:center;" onfocus="this.select()">' +
       '</div>' +
-      (it.retornavel ?
+      (it.retornavel && it.pool ?
+        '<div style="display:flex; align-items:center; gap:4px;">' +
+          '<label style="font-size:11px; color:var(--text-muted);">Caixas vazias (' + it.pool + ')</label>' +
+          '<span style="width:48px; text-align:center; font-size:13px;">' + it.caixasVazias + '</span>' +
+        '</div>'
+      : it.retornavel ?
         '<div style="display:flex; align-items:center; gap:4px;">' +
           '<label style="font-size:11px; color:var(--text-muted);">Caixas vazias</label>' +
           '<input type="number" min="0" id="vazias-' + it.id + '" value="' + it.caixasVazias + '" style="width:48px; text-align:center;" onfocus="this.select()">' +
@@ -447,6 +454,7 @@ function renderMessages() {
       try {
         await pushToSheet(items);
         setStatus("Pedido registrado — estoque atualizado na planilha");
+        await loadFromSheet();
       } catch (e) {
         setStatus("Erro ao registrar pedido. Tente novamente.");
         console.error(e);
@@ -470,6 +478,7 @@ document.getElementById("save-btn").addEventListener("click", async () => {
   try {
     await pushToSheet(items);
     setStatus("Alteracoes salvas na planilha");
+    await loadFromSheet();
   } catch (e) {
     setStatus("Erro ao salvar. Confira a URL e tente novamente.");
     console.error(e);
