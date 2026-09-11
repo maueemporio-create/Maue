@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manual de Abertura — Mauê Empório</title>
+<style>
+  :root {
+    --surface-0: #FAF9F6;
+    --surface-1: #F1EFE8;
+    --surface-2: #FFFFFF;
+    --text-primary: #2C2C2A;
+    --text-secondary: #5F5E5A;
+    --text-muted: #888780;
+    --text-danger: #A32D2D;
+    --text-success: #3B6D11;
+    --border: #D3D1C7;
+    --border-accent: #185FA5;
+    --text-accent: #185FA5;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 2rem 1rem;
+  }
+  input, button, textarea {
+    font-family: inherit;
+    font-size: 14px;
+    border-radius: var(--radius);
+    border: 0.5px solid var(--border);
+  }
+  input, textarea { padding: 6px 8px; }
+  textarea { width: 100%; resize: vertical; }
+  button {
+    background: var(--surface-2);
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--surface-1); }
+  button:active { transform: scale(0.98); }
+  .card {
+    background: var(--surface-2);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 8px;
+  }
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 1.75rem 0 4px;
+  }
+  .section-note {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0 0 10px;
+  }
+  .subsection-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin: 14px 0 6px;
+  }
+  .check-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .check-row input[type="checkbox"] {
+    margin-top: 3px;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    accent-color: var(--text-accent);
+  }
+  .check-body { flex: 1; min-width: 0; }
+  .check-name { font-size: 14px; font-weight: 500; }
+  .check-qty {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+  .check-obs {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-top: 2px;
+  }
+  label.field-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .turno-options {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+  .turno-options label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div style="max-width: 680px; margin: 0 auto;">
+  <a href="index.html" style="font-size:13px; color:var(--text-secondary); text-decoration:none; display:inline-block; margin-bottom:1rem;">&larr; Voltar</a>
+  <h1 style="font-size: 22px; font-weight: 500; margin-bottom: 4px;">Manual de Abertura</h1>
+  <p style="font-size:13px; color:var(--text-secondary); margin-top:0;">Checklist diário de cozinha — preencher e enviar a cada abertura de turno</p>
+  <p id="status-line" style="font-size:13px; color:var(--text-secondary); margin-top:0; margin-bottom: 1rem;">Conectando à planilha...</p>
+
+  <div id="config-box" style="background:var(--surface-1); border-radius:var(--radius); padding:0.75rem 1rem; margin-bottom:1.25rem;">
+    <label style="font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px;">URL do aplicativo da web (Google Apps Script)</label>
+    <div style="display:flex; gap:8px;">
+      <input id="script-url" type="text" placeholder="https://script.google.com/macros/s/.../exec" style="flex:1;">
+      <button id="save-url-btn" style="white-space:nowrap;">Conectar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:140px;">
+        <label class="field-label">Data</label>
+        <input id="campo-data" type="date" style="width:100%;">
+      </div>
+      <div style="flex:1; min-width:160px;">
+        <label class="field-label">Turno</label>
+        <div class="turno-options">
+          <label><input type="radio" name="turno" value="Almoco" checked> Almoço</label>
+          <label><input type="radio" name="turno" value="Jantar"> Jantar</label>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:10px;">
+      <label class="field-label">Responsável</label>
+      <input id="campo-responsavel" type="text" placeholder="Nome de quem está conferindo" style="width:100%;">
+    </div>
+  </div>
+
+  <div class="section-title">1. Conferência de Quantidade</div>
+  <p class="section-note">Marcar cada item após conferir a quantidade preparada para a abertura, conforme o dia (quarta ou sexta).</p>
+  <div id="lista-conf-dia"></div>
+
+  <div class="subsection-title">Preparo semanal (não varia por dia de abertura)</div>
+  <div id="lista-conf-semanal"></div>
+
+  <div class="section-title">2. Conferência de Abertura</div>
+  <p class="section-note">Conferir e ligar os equipamentos nos horários indicados.</p>
+  <div id="lista-equipamentos"></div>
+
+  <div class="subsection-title">Conferência de quantidade para abertura</div>
+  <div id="lista-qtd-abertura"></div>
+
+  <div class="section-title">3. Conferência de praça de finalização</div>
+  <p class="section-note">Marcar cada item após conferir que está reposto e pronto na praça.</p>
+  <div id="lista-praca"></div>
+
+  <div class="section-title">Observações / pendências do turno</div>
+  <textarea id="campo-observacoes" rows="4" placeholder="Anote aqui qualquer pendência ou observação do turno"></textarea>
+
+  <div style="display:flex; gap:8px; margin-top:1.25rem; margin-bottom:2rem;">
+    <button id="save-btn" style="flex:1; border-color:var(--border-accent); color:var(--text-accent); font-weight:500;">Salvar conferência</button>
+  </div>
+</div>
+
+<script>
+const URL_KEY = "maue-emporio-script-url";
+const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyIWxnYDtKZJxQGQsv37fN1m_B0frTzgKZ2tZHVjOb8NtH66XgarDNChzhvM2EeaIP83Q/exec";
+let scriptUrl = "";
+
+// Itens da conferencia de quantidade (quarta/sexta)
+const CONF_DIA = [
+  { nome: "Búfala & Parma", quarta: "3 porções", sexta: "3 porções", obs: "" },
+  { nome: "Tartare", quarta: "3 porções", sexta: "5 porções", obs: "descongelados" },
+  { nome: "Bolinho de Carne de Panela", quarta: "5 unidades", sexta: "7 unidades", obs: "descongelados" },
+  { nome: "Frango Frito Lambuzado", quarta: "3 porções", sexta: "5 porções", obs: "descongelados" },
+  { nome: "Costelinha Glaceada", quarta: "3 porções", sexta: "5 porções", obs: "descongelados" },
+  { nome: "Tonkatsu de Carré", quarta: "2 unidades", sexta: "4 unidades", obs: "empanados" },
+  { nome: "Corte do Dia", quarta: "3 porções", sexta: "5 porções", obs: "descongelados" }
+];
+
+// Preparo semanal (nao varia por dia)
+const CONF_SEMANAL = [
+  { nome: "Maionese de Batata", qtd: "2 litros", obs: "preparar na quinta-feira, para a semana" },
+  { nome: "Maionese de Togarashi", qtd: "1 pote", obs: "por dia" },
+  { nome: "Maionese de Chimichurri", qtd: "1 pote", obs: "por dia" },
+  { nome: "Torta Basca", qtd: "12 fatias", obs: "para a semana" }
+];
+
+// Equipamentos a ligar
+const EQUIPAMENTOS = [
+  { nome: "Óleo da fritadeira", obs: "ligar às 16h30" },
+  { nome: "Chapa de char broiler", obs: "ligar às 16h45" }
+];
+
+// Conferencia de quantidade para abertura (inclui queijo gouda cortado, adicionado em Set/2026)
+const QTD_ABERTURA = [
+  { nome: "Molho Roti", qtd: "1 GN", obs: "terrine para costelinha" },
+  { nome: "Batata porcionada", qtd: "", obs: "" },
+  { nome: "Mandioca porcionada", qtd: "", obs: "" },
+  { nome: "Queijo gouda cortado", qtd: "600g", obs: "" }
+];
+
+// Conferencia de praca de finalizacao
+const PRACA = [
+  "Sal de parrilla", "Sal e pimenta do reino", "Amendoim picado", "Nozes no missô",
+  "Cebolinha (ciboulette)", "Molho Caesar", "Molho Béarnaise", "Parmesão",
+  "Cebola roxa", "Molho de ostra", "Alcaparras com picles", "Caramelo de pimenta",
+  "Manteiga", "Limão siciliano"
+];
+
+function renderConfDia() {
+  const el = document.getElementById("lista-conf-dia");
+  el.innerHTML = CONF_DIA.map((it, i) =>
+    '<div class="card"><div class="check-row">' +
+      '<input type="checkbox" class="chk-item" data-label="' + it.nome + '" id="cd-' + i + '">' +
+      '<div class="check-body">' +
+        '<label class="check-name" for="cd-' + i + '">' + it.nome + '</label>' +
+        '<div class="check-qty"><span>Qtd quarta: ' + it.quarta + '</span><span>Qtd sexta: ' + it.sexta + '</span></div>' +
+        (it.obs ? '<div class="check-obs">' + it.obs + '</div>' : '') +
+      '</div>' +
+    '</div></div>'
+  ).join("");
+}
+
+function renderConfSemanal() {
+  const el = document.getElementById("lista-conf-semanal");
+  el.innerHTML = CONF_SEMANAL.map((it, i) =>
+    '<div class="card"><div class="check-row">' +
+      '<input type="checkbox" class="chk-item" data-label="' + it.nome + '" id="cs-' + i + '">' +
+      '<div class="check-body">' +
+        '<label class="check-name" for="cs-' + i + '">' + it.nome + '</label>' +
+        '<div class="check-qty"><span>' + it.qtd + '</span></div>' +
+        (it.obs ? '<div class="check-obs">' + it.obs + '</div>' : '') +
+      '</div>' +
+    '</div></div>'
+  ).join("");
+}
+
+function renderEquipamentos() {
+  const el = document.getElementById("lista-equipamentos");
+  el.innerHTML = EQUIPAMENTOS.map((it, i) =>
+    '<div class="card"><div class="check-row">' +
+      '<input type="checkbox" class="chk-item" data-label="' + it.nome + '" id="eq-' + i + '">' +
+      '<div class="check-body">' +
+        '<label class="check-name" for="eq-' + i + '">' + it.nome + '</label>' +
+        (it.obs ? '<div class="check-obs">' + it.obs + '</div>' : '') +
+      '</div>' +
+    '</div></div>'
+  ).join("");
+}
+
+function renderQtdAbertura() {
+  const el = document.getElementById("lista-qtd-abertura");
+  el.innerHTML = QTD_ABERTURA.map((it, i) =>
+    '<div class="card"><div class="check-row">' +
+      '<input type="checkbox" class="chk-item" data-label="' + it.nome + '" id="qa-' + i + '">' +
+      '<div class="check-body">' +
+        '<label class="check-name" for="qa-' + i + '">' + it.nome + '</label>' +
+        (it.qtd ? '<div class="check-qty"><span>' + it.qtd + '</span></div>' : '') +
+        (it.obs ? '<div class="check-obs">' + it.obs + '</div>' : '') +
+      '</div>' +
+    '</div></div>'
+  ).join("");
+}
+
+function renderPraca() {
+  const el = document.getElementById("lista-praca");
+  el.innerHTML = PRACA.map((nome, i) =>
+    '<div class="card"><div class="check-row">' +
+      '<input type="checkbox" class="chk-item" data-label="' + nome + '" id="pr-' + i + '">' +
+      '<div class="check-body"><label class="check-name" for="pr-' + i + '">' + nome + '</label></div>' +
+    '</div></div>'
+  ).join("");
+}
+
+function renderAll() {
+  renderConfDia();
+  renderConfSemanal();
+  renderEquipamentos();
+  renderQtdAbertura();
+  renderPraca();
+}
+
+function setStatus(msg) {
+  document.getElementById("status-line").textContent = msg;
+}
+
+function jsonp(url) {
+  return new Promise((resolve, reject) => {
+    const callbackName = "jsonp_cb_" + Math.random().toString(36).slice(2);
+    const script = document.createElement("script");
+    window[callbackName] = (data) => { resolve(data); cleanup(); };
+    function cleanup() {
+      delete window[callbackName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timer);
+    }
+    const timer = setTimeout(() => { reject(new Error("timeout")); cleanup(); }, 15000);
+    script.onerror = () => { reject(new Error("jsonp failed")); cleanup(); };
+    script.src = url + (url.includes("?") ? "&" : "?") + "callback=" + callbackName;
+    document.body.appendChild(script);
+  });
+}
+
+function init() {
+  scriptUrl = localStorage.getItem(URL_KEY) || DEFAULT_SCRIPT_URL;
+  document.getElementById("script-url").value = scriptUrl;
+  renderAll();
+  const hoje = new Date();
+  const iso = hoje.getFullYear() + "-" + String(hoje.getMonth() + 1).padStart(2, "0") + "-" + String(hoje.getDate()).padStart(2, "0");
+  document.getElementById("campo-data").value = iso;
+  setStatus(scriptUrl ? "Conectado à planilha" : "Configure a URL da planilha abaixo");
+}
+
+async function saveUrl() {
+  scriptUrl = document.getElementById("script-url").value.trim();
+  localStorage.setItem(URL_KEY, scriptUrl);
+  setStatus(scriptUrl ? "Conectado à planilha" : "Configure a URL da planilha abaixo");
+}
+
+document.getElementById("save-url-btn").addEventListener("click", saveUrl);
+
+document.getElementById("save-btn").addEventListener("click", async () => {
+  const responsavel = document.getElementById("campo-responsavel").value.trim();
+  if (!responsavel) {
+    alert("Preencha o nome do responsável antes de salvar.");
+    return;
+  }
+  if (!scriptUrl) {
+    setStatus("Configure a URL da planilha primeiro.");
+    return;
+  }
+
+  const data = document.getElementById("campo-data").value;
+  const turno = document.querySelector('input[name="turno"]:checked').value;
+  const observacoes = document.getElementById("campo-observacoes").value.trim();
+
+  const conferidos = [];
+  const pendentes = [];
+  document.querySelectorAll(".chk-item").forEach(chk => {
+    if (chk.checked) conferidos.push(chk.dataset.label);
+    else pendentes.push(chk.dataset.label);
+  });
+
+  setStatus("Salvando conferência...");
+  try {
+    const payload = { data, turno, responsavel, conferidos, pendentes, observacoes };
+    const url = scriptUrl + "?action=abertura_registrar&payload=" + encodeURIComponent(JSON.stringify(payload));
+    const res = await jsonp(url);
+    if (res && res.erro) { setStatus(res.erro); return; }
+    setStatus("Conferência enviada com sucesso — obrigado!");
+    document.querySelectorAll(".chk-item").forEach(chk => { chk.checked = false; });
+    document.getElementById("campo-observacoes").value = "";
+    document.getElementById("campo-responsavel").value = "";
+  } catch (e) {
+    setStatus("Erro ao salvar. Confira a URL e tente novamente.");
+    console.error(e);
+  }
+});
+
+init();
+</script>
+</body>
+</html>
